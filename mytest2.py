@@ -213,6 +213,10 @@ class ModbusType:
 
 
 if __name__ == '__main__':
+    br = bytearray()
+    bb = bytes(br)
+    print(disp_binary(fomate_bytes(bb,reg_num=1)))
+    exit(666)
     print("[{}] start...".format(get_time_str()))
     address = ('172.26.92.152', 502)
     resv_buff = 1024

@@ -8,7 +8,6 @@ from DeviceInfo import DeviceInfoType
 class ModbusType:
     def __init__(self, log: LogHelper, data: bytes = b''):
         self.recv_valid = False
-        self.reg_size = 2
         self.log: LogHelper = log
         self.dev_info = DeviceInfoType()
         # 事务标识
@@ -51,12 +50,13 @@ class ModbusType:
             self.reg_addr = data[8:10]
             # 读写寄存器的数目
             self.reg_num = struct.unpack('>H', data[10:12])[0]
-            print("seq:{} cmd_type:{} reg_addr:{} reg_num:{}".format(self.seq, self.recv_cmd_type,
-                                                                     struct.unpack(">H", self.reg_addr)[0],
-                                                                     self.reg_num))
+            self.log.info("seq:{} cmd_type:{} reg_addr:{} reg_num:{}".format(disp_binary(self.seq),
+                                                                             disp_binary(self.recv_cmd_type),
+                                                                             struct.unpack(">H", self.reg_addr)[0],
+                                                                             self.reg_num))
         else:
             self.recv_valid = False
-            print("Invalid recive, ignore!")
+            self.log.info("Invalid recive, ignore!")
 
     def get_reply_msg(self):
         if self.reg_addr == b'\x10\x69':
@@ -76,11 +76,11 @@ class ModbusType:
             # 查询分区状态
             self.build_0001_1_reply()
         else:
-            print("Not support reg_addr:", disp_binary(self.reg_addr))
+            self.log.warn("Not support reg_addr:{}".format(disp_binary(self.reg_addr)))
 
     def build_read_reg_reply(self, data_str, send_msg_len: bytes = None, send_data_len: bytes = None, fill=False):
-        bytes_len = self.reg_num if fill else 0
-        data_bytes = fomate_bytes(data_str, bytes_len)
+        expect_len = self.reg_num * self.dev_info.reg_size if fill else 0
+        data_bytes = fomate_bytes(data_str, expect_len)
         send_msg_len_int = len(data_bytes) + 3
         if not send_msg_len:
             send_msg_len = struct.pack('>H', send_msg_len_int)
@@ -111,5 +111,5 @@ class ModbusType:
 
     def build_0001_1_reply(self):
         """查询分区状态"""
-        self.dev_info.get_region_status_bytes()
-        self.build_read_reg_reply(self.dev_info.region_status_bytes)
+        tmp_bytes = self.dev_info.get_region_status_bytes()
+        self.build_read_reg_reply(tmp_bytes)
