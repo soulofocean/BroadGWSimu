@@ -18,6 +18,7 @@ class ModbusType:
         self.send_function_code = self.recv_function_code
         self.init_basic_info()
 
+    # region 属性
     @property
     def recv_seq(self):
         """
@@ -92,6 +93,7 @@ class ModbusType:
             return struct.unpack('>H', self.recv_reg_num)[0]
         return 0
 
+    # endregion
     def init_basic_info(self):
         """
         将收到的self.recv_data进行拆分和解析，存放在各个变量中
@@ -237,7 +239,7 @@ class ModbusType:
         :return:
         """
         self.send_data_bytes = self.send_MBPA_Header + self.send_function_code + (
-                    self.recv_reg_addr + self.recv_reg_num)
+                self.recv_reg_addr + self.recv_reg_num)
 
     def handle_10_03e8_action(self):
         """
