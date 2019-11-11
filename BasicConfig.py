@@ -26,11 +26,11 @@ class RegionConfig:
 class DeviceConfig:
     # 设备ID
     dev_id = '10212019201988800001'
-    # 设备型号
+    # 设备型号10个字符以内
     dev_model = 'ITC-7800A'
-    # 设备软件版本
+    # 设备软件版本30个字符内
     soft_version = '5.2'
-    # 启用的分区数目
+    # 启用的分区数目最多64个
     region_count = 2
     # region 设备基本配置，一般无需更改
     # 通信采用编码

@@ -211,11 +211,11 @@ class ModbusType:
         self.dev_info.get_region_status_bytes()
         self.build_read_reg_reply(self.dev_info.region_status_bytes)
 
-
+import time
+import datetime
 if __name__ == '__main__':
-    br = bytearray()
-    bb = bytes(br)
-    print(disp_binary(fomate_bytes(bb,reg_num=1)))
+    b1 = 12
+    print(disp_binary(bytes([b1,])))
     exit(666)
     print("[{}] start...".format(get_time_str()))
     address = ('172.26.92.152', 502)
