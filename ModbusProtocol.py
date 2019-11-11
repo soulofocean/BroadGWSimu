@@ -10,29 +10,87 @@ class ModbusType:
         self.recv_valid = False
         self.log: LogHelper = log
         self.dev_info = DeviceInfoType()
-        # 事务标识
-        self.seq = b''
-        # 协议标识，modbus为固定\x00\x00
-        self.pro_tag = b''
-        # 消息长度1,指的modbus协议中报文头中那个2个字节的长度
-        self.recv_msg_len = b''
-        self.send_msg_len = b''
-        # 单元标识，一般固定为\xff
-        self.unit_tag = b''
-        # 命令类型目前仅支持两个 \x04为读寄存器，\x01为写寄存器
-        self.recv_cmd_type = b''
-        self.send_cmd_type = b''
-        # 要读写的寄存器起始地址
-        self.reg_addr = b''
-        # 读写寄存器的数目
-        self.reg_num = 0
         # 收到的二进制
         self.recv_data: bytes = data
         # 发送的bytes
         self.send_data_bytes: bytes = b''
-        # region 异常回复的相关变量
-        # endregion
+        self.send_msg_len = self.recv_msg_len
+        self.send_function_code = self.recv_function_code
         self.init_basic_info()
+
+    @property
+    def recv_seq(self):
+        """
+        MBPA事务标识字段，2 bytes, 俗称消息序列号
+        :return:MBPA事务标识字段，2 bytes, 俗称消息序列号
+        """
+        return self.recv_data[0:2]
+
+    @property
+    def recv_pro_tag(self):
+        """
+        MBPA头协议标识字段，2bytes 一般为固定0x0000
+        :return: MBPA头协议标识字段，一般为固定0x0000
+        """
+        return self.recv_data[2:4]
+
+    @property
+    def recv_msg_len(self):
+        """
+        MBPA头报文长度字段，2bytes
+        :return: 接收的报文长度字段，2bytes
+        """
+        return self.recv_data[4:6]
+
+    @property
+    def recv_unit_tag(self):
+        """
+        MPBA头单元标识，1 byte 一般固定为0xff
+        :return: 单元标识，1byte 一般固定为0xff
+        """
+        return self.recv_data[6:7]
+
+    @property
+    def send_MBPA_Header(self):
+        """
+        返回MB协议MBPA头，由4个字段组成，共计2+2+2+1 =7 bytes
+        :return: 返回MB协议MBPA头
+        """
+        return self.recv_seq + self.recv_pro_tag + self.send_msg_len + self.recv_unit_tag
+
+    @property
+    def recv_function_code(self):
+        """
+        MB协议功能码字段，1个bytes,0x04是读寄存器，0x10是写寄存器，异常回复功能码会加上0x80
+        :return: MB协议功能码字段，1个bytes,0x04是读寄存器，0x10是写寄存器，会影响后面DATA域的格式
+        """
+        return self.recv_data[7:8]
+
+    @property
+    def recv_reg_addr(self):
+        """
+        读写寄存器的初始地址，2 bytes,目前协议0x04和0x10的DATA域前2bytes都是寄存器初始地址
+        :return: 读写寄存器的初始地址，2 bytes
+        """
+        return self.recv_data[8:10]
+
+    @property
+    def recv_reg_num(self):
+        """
+        读写寄存器的数目，2个bytes，读写寄存器的初始地址，2 bytes,目前协议0x04和0x10的DATA域2-4bytes都是寄存器数量
+        :return: 读写寄存器的数目，2个bytes
+        """
+        return self.recv_data[10:12]
+
+    @property
+    def recv_reg_num_int(self):
+        """
+        读写寄存器的数目,返回的是recv_reg_num转换成的一个int
+        :return: 读写寄存器的数目,返回的是recv_reg_num转换成的一个int
+        """
+        if self.recv_reg_num:
+            return struct.unpack('>H', self.recv_reg_num)[0]
+        return 0
 
     def init_basic_info(self):
         """
@@ -43,25 +101,11 @@ class ModbusType:
         self.log.info("recv:{}".format(disp_binary(data)))
         if data and len(data) >= 12:
             self.recv_valid = True
-            # 事务标识
-            self.seq = data[0:2]
-            # 协议标识，modbus为固定\x00\x00
-            self.pro_tag = data[2:4]
-            # 消息长度
-            self.recv_msg_len = data[4:6]
-            # 单元标识，一般固定为\xff
-            self.unit_tag = data[6:7]
-            # 命令类型 \x04为读寄存器，\x01为写寄存器
-            self.recv_cmd_type = data[7:8]
-            self.send_cmd_type = self.recv_cmd_type[:]
-            # 要读写的寄存器起始地址
-            self.reg_addr = data[8:10]
-            # 读写寄存器的数目
-            self.reg_num = struct.unpack('>H', data[10:12])[0]
-            self.log.info("seq:{} cmd_type:{} reg_addr:{} reg_num:{}".format(disp_binary(self.seq),
-                                                                             disp_binary(self.recv_cmd_type),
-                                                                             struct.unpack(">H", self.reg_addr)[0],
-                                                                             self.reg_num))
+            self.log.info("seq:{} function_code:{} reg_addr:{} reg_num:{}".format(disp_binary(self.recv_seq),
+                                                                                  disp_binary(self.recv_function_code),
+                                                                                  struct.unpack(">H",
+                                                                                                self.recv_reg_addr)[0],
+                                                                                  self.recv_reg_num_int))
         else:
             self.recv_valid = False
             self.log.error("Invalid recive, ignore!")
@@ -71,12 +115,12 @@ class ModbusType:
         处理回复信息
         :return:
         """
-        if self.recv_cmd_type == b'\x04':
+        if self.recv_function_code == b'\x04':
             self.handle_04_reply_msg()
-        elif self.recv_cmd_type == b'\x10':
+        elif self.recv_function_code == b'\x10':
             self.handle_10_reply_msg()
         else:
-            self.log.error("Not support recv_cmd_type:{}".format(disp_binary(self.recv_cmd_type)))
+            self.log.error("Not support recv_function_code:{}".format(disp_binary(self.recv_function_code)))
 
     def get_function_obj(self, cmd_str):
         """
@@ -84,8 +128,8 @@ class ModbusType:
         :param cmd_str: 10为读寄存器相关实例方法，04为写寄存器的相关实例方法，此字段为防止读写恰好寄存器地址相同时候冲突
         :return: callable的实例方法，找不到则返回空
         """
-        if self.reg_addr:
-            fname = '_{}_{}_'.format(cmd_str, ''.join(map(lambda x: "{:02x}".format(x), self.reg_addr)))
+        if self.recv_reg_addr:
+            fname = '_{}_{}_'.format(cmd_str, ''.join(map(lambda x: "{:02x}".format(x), self.recv_reg_addr)))
             funs = [x for x in self.__dir__() if fname in x]
             if funs:
                 self.log.info("get funs:{}".format(funs))
@@ -117,8 +161,9 @@ class ModbusType:
             call_obj()
 
     def build_ex_msg_reply(self, ex_msg_len=b'\x00\x06', exp_code=b'\x04', ex_offset=0x80):
-        self.send_cmd_type = bytes([ord(self.recv_cmd_type) + ex_offset, ])
-        self.send_data_bytes = self.seq + self.pro_tag + ex_msg_len + self.unit_tag + self.send_cmd_type + exp_code
+        self.send_function_code = bytes([ord(self.recv_function_code) + ex_offset, ])
+        self.send_msg_len = ex_msg_len
+        self.send_data_bytes = self.send_MBPA_Header + self.send_function_code + exp_code
 
     # region 04 build reply msg
     def build_read_reg_reply(self, data_str, send_msg_len: bytes = None, send_data_len: bytes = None, fill=False):
@@ -130,7 +175,7 @@ class ModbusType:
         :param fill: 长度不足是否需要填充，默认不填充
         :return:
         """
-        expect_len = self.reg_num * self.dev_info.reg_size if fill else 0
+        expect_len = self.recv_reg_num_int * self.dev_info.reg_size if fill else 0
         data_bytes = fomate_bytes(data_str, expect_len)
         send_msg_len_int = len(data_bytes) + 3
         if not send_msg_len:
@@ -140,8 +185,8 @@ class ModbusType:
                 send_data_len = b'\xFF'
             else:
                 send_data_len = struct.pack('>B', send_msg_len_int - 3)
-        self.send_data_bytes = self.seq + self.pro_tag + send_msg_len + (
-                self.unit_tag + self.recv_cmd_type + send_data_len + data_bytes)
+        self.send_msg_len = send_msg_len
+        self.send_data_bytes = self.send_MBPA_Header + self.send_function_code + (send_data_len + data_bytes)
 
     def handle_04_1069_action(self):
         """查询设备ID"""
@@ -191,9 +236,8 @@ class ModbusType:
         组合写寄存器的回包，存放在self.send_data_bytes中
         :return:
         """
-        reg_num_bytes = struct.pack('>H', self.reg_num)
-        self.send_data_bytes = self.seq + self.pro_tag + self.send_msg_len + (
-                self.unit_tag + self.send_cmd_type + self.reg_addr + reg_num_bytes)
+        self.send_data_bytes = self.send_MBPA_Header + self.send_function_code + (
+                    self.recv_reg_addr + self.recv_reg_num)
 
     def handle_10_03e8_action(self):
         """
@@ -310,4 +354,13 @@ class ModbusType:
 
 
 if __name__ == '__main__':
-    ...
+    testlog = LogHelper('testlog')
+    mbinfo = ModbusType(testlog, b'\x00\x01\x00\x00\x00\x06\xff\x04')
+    print('recv_seq:', disp_binary(mbinfo.recv_seq))
+    print('recv_pro_tag:', disp_binary(mbinfo.recv_pro_tag))
+    print('recv_cmd_len:', disp_binary(mbinfo.recv_msg_len))
+    print('recv_unit_tag:', disp_binary(mbinfo.recv_unit_tag))
+    print('send_msg_len:', disp_binary(mbinfo.send_msg_len))
+    mbinfo.send_msg_len = b'\x00\x08'
+    print('send_msg_len:', disp_binary(mbinfo.send_msg_len))
+    print('recv_cmd_len:', disp_binary(mbinfo.recv_msg_len))
