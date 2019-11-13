@@ -4,9 +4,12 @@ from CommonAPI import disp_binary
 from ModbusProtocol import ModbusType
 from BasicConfig import SocketConfig
 import traceback
+import time
+
 
 class MySocketServer:
-    def __init__(self, mylog: LogHelper, addr: tuple = SocketConfig.server_addr, buff: int = SocketConfig.recv_buff,
+    def __init__(self, mylog: LogHelper, modbus: ModbusType, addr: tuple = SocketConfig.server_addr,
+                 buff: int = SocketConfig.recv_buff,
                  listen_num=SocketConfig.lister_num):
         self.server_addr = addr
         self.log: LogHelper = mylog
@@ -15,6 +18,7 @@ class MySocketServer:
         self.socket_server = None
         self.conn = None
         self.client_addr = None
+        self.mobus_info = modbus
 
     def run_forever(self):
         while True:
@@ -29,16 +33,23 @@ class MySocketServer:
                     ra = self.conn.recv(self.recv_buff)
                     self.log.info('recv len:{}'.format(len(ra)))
                     if len(ra) <= 0:
+                        # self.log.warn("receive 0 bytes msg!")
+                        # continue
                         self.log.warn("try to close connection for receive 0 bytes msg")
                         self.conn.close()
                         self.log.warn("close connection for receive 0 bytes msg complete")
                         break
-                    resv_info = ModbusType(self.log, ra)
-                    if not resv_info.recv_valid:
+                    if self.mobus_info:
+                        self.mobus_info.recv_new_msg(ra)
+                    else:
+                        self.mobus_info = ModbusType(self.log, ra)
+                    if not self.mobus_info.recv_valid:
                         continue
-                    resv_info.handle_reply_msg()
-                    if resv_info.send_data_bytes:
-                        self.log.info("send:{}".format(disp_binary(resv_info.send_data_bytes)))
-                        self.conn.send(resv_info.send_data_bytes)
+                    self.mobus_info.handle_reply_msg()
+                    if self.mobus_info.send_data_bytes:
+                        self.log.info("send:{}".format(disp_binary(self.mobus_info.send_data_bytes)))
+                        self.conn.send(self.mobus_info.send_data_bytes)
             except Exception:
                 self.log.error(traceback.format_exc())
+                self.log.error('sleep 10s and retry...')
+                time.sleep(10)

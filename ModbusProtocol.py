@@ -60,12 +60,20 @@ class ModbusType:
         return self.recv_seq + self.recv_pro_tag + self.send_msg_len + self.recv_unit_tag
 
     @property
+    def recv_data_data(self):
+        """
+        MBPA报文DATA域，参照wireshark取第7个bytes后的内容,即取Header后的内容都算DATA
+        :return: MBPA报文DATA域，取第7个bytes后的内容
+        """
+        return self.recv_data[7:]
+
+    @property
     def recv_function_code(self):
         """
         MB协议功能码字段，1个bytes,0x04是读寄存器，0x10是写寄存器，异常回复功能码会加上0x80
         :return: MB协议功能码字段，1个bytes,0x04是读寄存器，0x10是写寄存器，会影响后面DATA域的格式
         """
-        return self.recv_data[7:8]
+        return self.recv_data_data[:1]
 
     @property
     def recv_reg_addr(self):
@@ -73,7 +81,8 @@ class ModbusType:
         读写寄存器的初始地址，2 bytes,目前协议0x04和0x10的DATA域前2bytes都是寄存器初始地址
         :return: 读写寄存器的初始地址，2 bytes
         """
-        return self.recv_data[8:10]
+        # return self.recv_data[8:10]
+        return self.recv_data_data[1:3]
 
     @property
     def recv_reg_num(self):
@@ -81,7 +90,16 @@ class ModbusType:
         读写寄存器的数目，2个bytes，读写寄存器的初始地址，2 bytes,目前协议0x04和0x10的DATA域2-4bytes都是寄存器数量
         :return: 读写寄存器的数目，2个bytes
         """
-        return self.recv_data[10:12]
+        # return self.recv_data[10:12]
+        return self.recv_data_data[3:5]
+
+    @property
+    def recv_byte_count(self):
+        """
+        表明后面字节长度，只有一个byte
+        :return:表明后面字节长度，只有一个byte
+        """
+        return self.recv_data_data[5:6]
 
     @property
     def recv_reg_num_int(self):
@@ -94,6 +112,16 @@ class ModbusType:
         return 0
 
     # endregion
+    def recv_new_msg(self,new_data:bytes):
+        self.recv_valid = False
+        # 收到的二进制
+        self.recv_data: bytes = new_data
+        # 发送的bytes
+        self.send_data_bytes: bytes = b''
+        self.send_msg_len = self.recv_msg_len
+        self.send_function_code = self.recv_function_code
+        self.init_basic_info()
+
     def init_basic_info(self):
         """
         将收到的self.recv_data进行拆分和解析，存放在各个变量中
@@ -205,7 +233,7 @@ class ModbusType:
 
     def handle_04_2710_action(self):
         """查询所有会话状态"""
-        self.build_read_reg_reply('', fill=True)
+        self.build_read_reg_reply(self.dev_info.session_status_bytes, fill=True)
 
     def handle_04_0001_action(self):
         """查询分区状态"""
@@ -246,6 +274,18 @@ class ModbusType:
         即时播放/停止广播
         :return:
         """
+        logTmp = 'Try to Begin Session:'
+        session_id = self.recv_data_data[6:8]
+        # 0001代表正在播放
+        session_val = b'\x00\x01'
+        if self.recv_reg_num_int == 2:
+            # 表示停止播放
+            session_val = b'\x00\x00'
+            logTmp = 'Try to Stop Session:'
+        logTmp += disp_binary(session_id)
+        self.log.info(logTmp)
+        self.log.info("sessionid:{} session_val:{}".format(disp_binary(session_id),disp_binary(session_val)))
+        self.dev_info.set_seesion_status(session_id,session_val)
         self.build_write_reg_reply()
 
     def handle_10_07d1_action(self):
@@ -356,13 +396,20 @@ class ModbusType:
 
 
 if __name__ == '__main__':
-    testlog = LogHelper('testlog')
-    mbinfo = ModbusType(testlog, b'\x00\x01\x00\x00\x00\x06\xff\x04')
-    print('recv_seq:', disp_binary(mbinfo.recv_seq))
-    print('recv_pro_tag:', disp_binary(mbinfo.recv_pro_tag))
-    print('recv_cmd_len:', disp_binary(mbinfo.recv_msg_len))
-    print('recv_unit_tag:', disp_binary(mbinfo.recv_unit_tag))
-    print('send_msg_len:', disp_binary(mbinfo.send_msg_len))
-    mbinfo.send_msg_len = b'\x00\x08'
-    print('send_msg_len:', disp_binary(mbinfo.send_msg_len))
-    print('recv_cmd_len:', disp_binary(mbinfo.recv_msg_len))
+    br = bytearray(b'\x00'*10)
+    print(br)
+    b2_v = b'\x01\x01'
+    br[2:4]=b2_v[:2]
+    print(br)
+    b2_v = b'\x02\x02'
+    print(br)
+    # testlog = LogHelper('testlog')
+    # mbinfo = ModbusType(testlog, b'\x00\x01\x00\x00\x00\x06\xff\x04')
+    # print('recv_seq:', disp_binary(mbinfo.recv_seq))
+    # print('recv_pro_tag:', disp_binary(mbinfo.recv_pro_tag))
+    # print('recv_cmd_len:', disp_binary(mbinfo.recv_msg_len))
+    # print('recv_unit_tag:', disp_binary(mbinfo.recv_unit_tag))
+    # print('send_msg_len:', disp_binary(mbinfo.send_msg_len))
+    # mbinfo.send_msg_len = b'\x00\x08'
+    # print('send_msg_len:', disp_binary(mbinfo.send_msg_len))
+    # print('recv_cmd_len:', disp_binary(mbinfo.recv_msg_len))

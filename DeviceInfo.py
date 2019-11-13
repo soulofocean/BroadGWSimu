@@ -3,6 +3,7 @@
 from CommonAPI import fomate_bytes, fomate_str
 from BasicConfig import DeviceConfig, RegionConfig
 import typing
+import struct
 
 
 class RegionInfoType:
@@ -53,7 +54,16 @@ class DeviceInfoType:
         self.reg_size = DeviceConfig.dev_reg_size
         # 编码方式
         self.dev_encode = DeviceConfig.dev_encode
+        # 设备会话列表
+        self.session_status_bytes = bytearray(b'\x00\x00' * DeviceConfig.session_num)
         self.init_region_info_list()
+
+    def set_seesion_status(self, session_num: bytes, status_val: bytes):
+        session_num_int = struct.unpack('>H',session_num)[0]
+        if session_num_int > 200 or session_num_int < 1:
+            raise IndexError('session_num {} invalid [1-200]!'.format(session_num_int))
+        start_index = (session_num_int - 1) * 2
+        self.session_status_bytes[start_index:start_index + 2] = status_val[:2]
 
     def init_region_info_list(self):
         if self.region_count and self.dev_id:

@@ -1,7 +1,9 @@
 # coding:utf-8
 
 class SocketConfig:
-    server_addr = ('172.26.92.152', 502)
+    # 本地IP和端口
+    server_addr = ('172.26.92.159', 502)
+    # 下面的不用管
     recv_buff = 8192
     lister_num = 1
 
@@ -41,4 +43,6 @@ class DeviceConfig:
     max_region_count = 64
     # 每个分区的ID和名字分别占用30个寄存器
     region_reg_num = 30
+    # 每个设备的会话数，默认为800
+    session_num = 800
     # endregion

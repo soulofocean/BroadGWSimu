@@ -39,7 +39,7 @@ def fomate_bytes(data, expect_len: int = 0, encoding: str = 'utf-16be', fill_inf
     """
     result: bytes = data
     # 如果传进来的是bytes就直接用，否则就encode一下
-    if not isinstance(data, bytes):
+    if not isinstance(data, bytes) and not isinstance(data,bytearray):
         result = data.encode(encoding)
     fill_len = expect_len - len(result)
     if fill_len > 0:
