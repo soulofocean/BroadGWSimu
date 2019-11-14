@@ -41,22 +41,26 @@ class MySocketServer:
 
     def process_msg(self,conn, client_addr):
         while True:
-            ra = conn.recv(self.recv_buff)
-            self.log.info('{} recv len:{}'.format(client_addr, len(ra)))
-            if len(ra) <= 0:
-                # self.log.warn("receive 0 bytes msg!")
-                # continue
-                self.log.warn("try to close connection for receive 0 bytes msg")
-                conn.close()
-                self.log.warn("close connection for receive 0 bytes msg complete")
-                break
-            if self.mobus_info:
-                self.mobus_info.recv_new_msg(ra)
-            else:
-                self.mobus_info = ModbusType(self.log, ra)
-            if not self.mobus_info.recv_valid:
-                continue
-            self.mobus_info.handle_reply_msg()
-            if self.mobus_info.send_data_bytes:
-                self.log.info("send:{}".format(disp_binary(self.mobus_info.send_data_bytes)))
-                conn.send(self.mobus_info.send_data_bytes)
+            try:
+                ra = conn.recv(self.recv_buff)
+                self.log.info('{} recv len:{}'.format(client_addr, len(ra)))
+                if len(ra) <= 0:
+                    # self.log.warn("receive 0 bytes msg!")
+                    # continue
+                    self.log.warn("try to close connection for receive 0 bytes msg")
+                    conn.close()
+                    self.log.warn("close connection for receive 0 bytes msg complete")
+                    break
+                if self.mobus_info:
+                    self.mobus_info.recv_new_msg(ra)
+                else:
+                    self.mobus_info = ModbusType(self.log, ra)
+                if not self.mobus_info.recv_valid:
+                    continue
+                self.mobus_info.handle_reply_msg()
+                if self.mobus_info.send_data_bytes:
+                    self.log.info("{} send:{}".format(client_addr, disp_binary(self.mobus_info.send_data_bytes)))
+                    conn.send(self.mobus_info.send_data_bytes)
+            except:
+                self.log.error(traceback.format_exc())
+                raise

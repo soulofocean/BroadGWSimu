@@ -16,7 +16,7 @@ class ModbusType:
         self.send_data_bytes: bytes = b''
         self.send_msg_len = self.recv_msg_len
         self.send_function_code = self.recv_function_code
-        self.init_basic_info()
+        # self.init_basic_info()
 
     # region 属性
     @property
