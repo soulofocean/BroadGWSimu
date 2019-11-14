@@ -5,6 +5,10 @@ from ModbusProtocol import ModbusType
 from BasicConfig import SocketConfig
 import traceback
 import time
+import gevent
+from gevent import monkey
+
+monkey.patch_all()
 
 
 class MySocketServer:
@@ -15,41 +19,44 @@ class MySocketServer:
         self.log: LogHelper = mylog
         self.recv_buff = buff
         self.listen_num = listen_num
-        self.socket_server = None
+        self.socket_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.conn = None
         self.client_addr = None
         self.mobus_info = modbus
+        self.socket_server.bind(self.server_addr)
+        self.socket_server.listen(self.listen_num)
+        self.log.warn("server_addr:{} listen_port:{}".format(self.server_addr[0], self.server_addr[1]))
 
     def run_forever(self):
         while True:
             try:
-                self.socket_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.socket_server.bind(self.server_addr)
-                self.socket_server.listen(self.listen_num)
-                self.log.warn("server_addr:{} listen_port:{}".format(self.server_addr[0], self.server_addr[1]))
-                self.conn, self.client_addr = self.socket_server.accept()
-                self.log.warn('got connected from{}'.format(self.client_addr))
-                while True:
-                    ra = self.conn.recv(self.recv_buff)
-                    self.log.info('recv len:{}'.format(len(ra)))
-                    if len(ra) <= 0:
-                        # self.log.warn("receive 0 bytes msg!")
-                        # continue
-                        self.log.warn("try to close connection for receive 0 bytes msg")
-                        self.conn.close()
-                        self.log.warn("close connection for receive 0 bytes msg complete")
-                        break
-                    if self.mobus_info:
-                        self.mobus_info.recv_new_msg(ra)
-                    else:
-                        self.mobus_info = ModbusType(self.log, ra)
-                    if not self.mobus_info.recv_valid:
-                        continue
-                    self.mobus_info.handle_reply_msg()
-                    if self.mobus_info.send_data_bytes:
-                        self.log.info("send:{}".format(disp_binary(self.mobus_info.send_data_bytes)))
-                        self.conn.send(self.mobus_info.send_data_bytes)
+                # self.conn, self.client_addr = self.socket_server.accept()
+                conn, client_addr = self.socket_server.accept()
+                self.log.warn('got connected from{}'.format(client_addr))
+                gevent.spawn(self.process_msg, conn, client_addr)
             except Exception:
                 self.log.error(traceback.format_exc())
                 self.log.error('sleep 10s and retry...')
                 time.sleep(10)
+
+    def process_msg(self,conn, client_addr):
+        while True:
+            ra = conn.recv(self.recv_buff)
+            self.log.info('{} recv len:{}'.format(client_addr, len(ra)))
+            if len(ra) <= 0:
+                # self.log.warn("receive 0 bytes msg!")
+                # continue
+                self.log.warn("try to close connection for receive 0 bytes msg")
+                conn.close()
+                self.log.warn("close connection for receive 0 bytes msg complete")
+                break
+            if self.mobus_info:
+                self.mobus_info.recv_new_msg(ra)
+            else:
+                self.mobus_info = ModbusType(self.log, ra)
+            if not self.mobus_info.recv_valid:
+                continue
+            self.mobus_info.handle_reply_msg()
+            if self.mobus_info.send_data_bytes:
+                self.log.info("send:{}".format(disp_binary(self.mobus_info.send_data_bytes)))
+                conn.send(self.mobus_info.send_data_bytes)

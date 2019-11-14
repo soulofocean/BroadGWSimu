@@ -5,7 +5,7 @@ class SocketConfig:
     server_addr = ('172.26.92.159', 502)
     # 下面的不用管
     recv_buff = 8192
-    lister_num = 1
+    lister_num = 2
 
 
 class RegionConfig:
