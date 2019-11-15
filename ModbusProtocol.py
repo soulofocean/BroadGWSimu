@@ -112,7 +112,7 @@ class ModbusType:
         return 0
 
     # endregion
-    def recv_new_msg(self,new_data:bytes):
+    def recv_new_msg(self, new_data: bytes):
         self.recv_valid = False
         # 收到的二进制
         self.recv_data: bytes = new_data
@@ -284,8 +284,8 @@ class ModbusType:
             logTmp = 'Try to Stop Session:'
         logTmp += disp_binary(session_id)
         self.log.info(logTmp)
-        self.log.info("sessionid:{} session_val:{}".format(disp_binary(session_id),disp_binary(session_val)))
-        self.dev_info.set_seesion_status(session_id,session_val)
+        self.log.info("sessionid:{} session_val:{}".format(disp_binary(session_id), disp_binary(session_val)))
+        self.dev_info.set_seesion_status(session_id, session_val)
         self.build_write_reg_reply()
 
     def handle_10_07d1_action(self):
@@ -307,6 +307,24 @@ class ModbusType:
         播放暂停/恢复
         :return:
         """
+        session_id = self.recv_data_data[6:8]
+        action_id = self.recv_data_data[8:10]
+        self.log.info("session:{} pause/restore:{}".format(disp_binary(session_id), disp_binary(action_id)))
+
+        if action_id == b'\x00\x01':
+            tmp_str = '暂停'
+            session_val = b'\x00\x02'
+        elif action_id == b'\x00\x02':
+            tmp_str = '恢复'
+            session_val = b'\x00\x01'
+        else:
+            self.log.error('not support cmd:{}'.format(disp_binary(action_id)))
+            session_val = b''
+            tmp_str = ''
+        if session_val:
+            self.log.info('try to {} session:{}'.format(tmp_str, disp_binary(session_id)))
+            self.dev_info.set_seesion_status(session_id,session_val)
+            self.log.info('{} session:{} complete'.format(tmp_str, disp_binary(session_id)))
         self.build_write_reg_reply()
 
     def handle_10_0bb8_action(self):
@@ -396,10 +414,10 @@ class ModbusType:
 
 
 if __name__ == '__main__':
-    br = bytearray(b'\x00'*10)
+    br = bytearray(b'\x00' * 10)
     print(br)
     b2_v = b'\x01\x01'
-    br[2:4]=b2_v[:2]
+    br[2:4] = b2_v[:2]
     print(br)
     b2_v = b'\x02\x02'
     print(br)
